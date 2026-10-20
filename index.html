@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your Synapse on Drugs</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#5b4370}
+*{box-sizing:border-box}
+body{margin:0;padding:12px;font-family:'Fredoka','Baloo 2','Nunito',ui-rounded,'Trebuchet MS',sans-serif;color:var(--ink);background:#ffe6f3;transition:background-color 1s}
+.card{max-width:920px;margin:0 auto;background:#fffafd;border:4px solid #fff;border-radius:32px;padding:16px;box-shadow:0 10px 0 rgba(255,150,200,.28)}
+h1{margin:2px 0 2px;text-align:center;font-weight:600;font-size:clamp(1.6rem,5.5vw,2.6rem);color:#ff6fae;text-shadow:2px 2px 0 #fff,4px 4px 0 #ffd3e8}
+.sub{margin:0 0 12px;text-align:center;font-size:clamp(.85rem,2.6vw,1rem)}
+.stage{border-radius:26px;overflow:hidden;border:4px solid #fff;box-shadow:0 0 0 3px var(--acc,#9ccfff);transition:box-shadow 1s}
+canvas{display:block;width:100%;height:auto;aspect-ratio:800/440}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:center;margin:12px 0;font-size:.85rem}
+.legend span{display:flex;align-items:center;gap:5px}
+.legend i{width:13px;height:13px;border-radius:50%;display:block}
+.controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+button{font:inherit;font-weight:600;color:var(--ink);border:0;border-radius:999px;padding:12px 14px;cursor:pointer;box-shadow:0 5px 0 rgba(90,60,120,.16);transition:transform .12s,box-shadow .12s}
+button:hover{transform:translateY(-2px)}
+button:active{transform:translateY(4px);box-shadow:0 1px 0 rgba(90,60,120,.16)}
+button:focus-visible{outline:3px solid #7b5cff;outline-offset:2px}
+button.on{outline:4px solid var(--ink);outline-offset:1px}
+.b-alc{background:#ffc2e0}.b-dz{background:#bff0cf}.b-mor{background:#cfd4ff}.b-amp{background:#ffe08a}.b-nor{background:#e9e3f5}
+.cap{margin-top:14px;background:#fff;border:3px dashed var(--acc,#9ccfff);border-radius:24px;padding:14px 18px;transition:border-color 1s}
+.cap h2{margin:0 0 6px;font-size:1.15rem;font-weight:600}
+.cap p{margin:0 0 12px;line-height:1.55;font-size:.98rem;max-width:72ch}
+.m{display:grid;grid-template-columns:104px 1fr;align-items:center;gap:8px;font-size:.82rem;margin-top:5px}
+.m i{display:block;height:12px;background:#f1e8f7;border-radius:9px;overflow:hidden}
+.m b{display:block;height:100%;border-radius:9px;transition:width .9s}
+.foot{margin:12px 0 0;text-align:center;font-size:.78rem;opacity:.8}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main class="card">
+  <h1>Your Synapse on Drugs</h1>
+  <p class="sub">Watch how common drugs change brain signals, and why that makes driving dangerous.</p>
+  <div class="stage"><canvas id="cv" width="800" height="440" role="img" aria-label="Animated synapse: a presynaptic neuron on the left releases neurotransmitters across the cleft to a postsynaptic neuron on the right."></canvas></div>
+  <div class="legend">
+    <span><i style="background:#58b8ff"></i>Acetylcholine</span>
+    <span><i style="background:#ffa24d"></i>Norepinephrine</span>
+    <span><i style="background:#ff9ed2"></i>GABA</span>
+    <span><i style="background:#ff5fa8"></i>Dopamine</span>
+    <span><i style="background:#2fcf7f"></i>Chloride (Cl⁻)</span>
+  </div>
+  <div class="controls" id="ctl">
+    <button class="b-alc" data-m="alc" aria-pressed="false">🍷 Add Alcohol (Ethanol)</button>
+    <button class="b-dz" data-m="dz" aria-pressed="false">💚 Add Diazepam</button>
+    <button class="b-mor" data-m="mor" aria-pressed="false">💤 Add Morphine</button>
+    <button class="b-amp" data-m="amp" aria-pressed="false">⚡️ Add Amphetamine</button>
+    <button class="b-nor on" data-m="normal" aria-pressed="true">🔄 Reset to Normal</button>
+  </div>
+  <section class="cap" aria-live="polite">
+    <h2 id="ct"></h2>
+    <p id="cx"></p>
+    <div class="m"><span>Signal flow</span><i><b id="m0" style="background:#7ec8ff"></b></i></div>
+    <div class="m"><span>Alertness</span><i><b id="m1" style="background:#ffb86b"></b></i></div>
+    <div class="m"><span>Risky impulses</span><i><b id="m2" style="background:#ff7fb6"></b></i></div>
+  </section>
+  <p class="foot">Simplified educational model, bars are illustrative. Never drive after alcohol or drugs.</p>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+const cv=$('#cv'),ctx=cv.getContext('2d'),W=800,H=440;
+const calm=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const COL={ach:'#58b8ff',ne:'#ffa24d',gaba:'#ff9ed2',da:'#ff5fa8',cl:'#2fcf7f'};
+const hex=h=>[1,3,5].map(i=>parseInt(h.substr(i,2),16));
+const rgb=a=>rgb(${a.map(Math.round)});
+
+const MODES={
+normal:{t:"😊 Sober baseline: everything is flowing",x:"Acetylcholine (blue) and norepinephrine (orange) cross the cleft in a blink and tickle the receptors, so each one lights up. Signals arrive fast, attention stays sharp, and your foot hits the brake the moment a pedestrian steps out. Pick a drug below to see what changes.",spd:1,rel:4,gaba:0,cl:0,gate:1,pre:'happy',post:'happy',bg:['#e3f3ff','#fff0f8'],page:'#ffe6f3',acc:'#9ccfff',m:[100,100,10],body:'#8fb0ff',dec:2.5},
+alc:{t:"🍷 Alcohol: everything gets slow and sleepy",x:"Ethanol boosts GABA, the brain’s brake chemical, and dampens excitatory signals, so messages crawl across the synapse. Reaction time stretches, judgment and coordination blur, and eye tracking slips. At road speed, that extra delay means extra metres travelled before you even start braking, often the difference between stopping and hitting the pedestrian.",spd:.25,rel:3,gaba:22,cl:0,gate:1,pre:'drowsy',post:'sleepy',bg:['#efdcff','#ffe0ee'],page:'#f1defa',acc:'#e0a8f0',m:[35,30,60],body:'#c9a6e8',dec:.7},
+dz:{t:"💚 Diazepam: calm, quiet, dangerously drowsy",x:"Diazepam makes GABA-A receptors open their chloride channels more often. Cl⁻ ions pour in, the receiving neuron becomes harder to fire, and the whole circuit settles into sedation. Drivers get slow reactions, drowsiness and poor attention: drifting out of lane, missing a red light, or reacting late to brake lights. Mixing it with alcohol makes the effect much stronger.",spd:.3,rel:2.5,gaba:3,cl:34,gate:1,pre:'calm',post:'calm',bg:['#d8f7e3','#f3ffe6'],page:'#dff7e6',acc:'#7fd9a0',m:[25,15,20],body:'#7fd9a0',dec:1.2},
+mor:{t:"💤 Morphine: release switched down to a trickle",x:"Morphine activates opioid receptors that shut calcium channels on the sending terminal. Without Ca²⁺ coming in, vesicles can’t release their neurotransmitter, so pain signals are blocked, but so is general alertness. The result is drowsiness, slow thinking and constricted pupils that hurt night vision, so a nodding driver may never notice the car braking ahead.",spd:.8,rel:.35,gaba:0,cl:0,gate:0,pre:'drowsy',post:'drowsy',bg:['#e2e5ff','#f1e7ff'],page:'#e8e6fb',acc:'#a9aef0',m:[30,20,10],body:'#a9aef0',dec:1.5},
+amp:{t:"⚡️ Amphetamine: a flood of dopamine and norepinephrine",x:"Amphetamine forces nerve endings to dump dopamine and norepinephrine and blocks their clean-up, so the cleft overflows and receptors fire nonstop. You feel energetic and invincible, but judgment, impulse control and risk assessment get worse. Expect speeding, tailgating and risky overtakes, then a crash of exhaustion and microsleeps when it wears off.",spd:1.8,rel:calm?14:40,gaba:0,cl:0,gate:1,pre:'hyper',post:'hyper',bg:['#fff1b3','#ffd3e3'],page:'#fff0c4',acc:'#ffb347',m:[100,90,95],body:'#ffb347',dec:6}
+};
+
+/* geometry */
+const PRE={cx:140,cy:225,rx:175,ry:160},POST={cx:660,cy:225,rx:175,ry:160};
+const preEdge=y=>PRE.cx+PRE.rx*Math.sqrt(Math.max(0,1-((y-PRE.cy)/PRE.ry)**2));
+const postEdge=y=>POST.cx-POST.rx*Math.sqrt(Math.max(0,1-((y-POST.cy)/POST.ry)**2));
+const GY=[160,225,290];
+const R=[135,180,225,270,315].map(y=>({y,x:postEdge(y),pulse:0,col:'#fff'}));
+const V=Array.from({length:8},(_,i)=>({x:215+(i%2)*38+Math.random()*10,y:140+i*24,ph:i*1.3}));
+
+/* state */
+let mode='normal',M=MODES.normal,T=0,sc=1,gate=1,P=[],S=[],acc={r:0,g:0,c:0};
+let cur=M.bg.map(hex),tg=cur.map(a=>a.slice());
+  /* drawing */
+function blob(c,a,b,line,amp){
+  const g=ctx.createRadialGradient(c.cx,c.cy,10,c.cx,c.cy,c.rx);
+  g.addColorStop(0,a);g.addColorStop(1,b);
+  ctx.beginPath();
+  for(let i=0;i<=72;i++){
+    const t=i/72*6.2832,w=calm?1:1+amp*(.012*Math.sin(3*t+T*1.6+c.cx)+.008*Math.sin(5*t-T*1.1));
+    const x=c.cx+Math.cos(t)*c.rx*w,y=c.cy+Math.sin(t)*c.ry*w;
+    i?ctx.lineTo(x,y):ctx.moveTo(x,y);
+  }
+  ctx.closePath();ctx.fillStyle=g;ctx.fill();ctx.lineWidth=6;ctx.strokeStyle=line;ctx.stroke();
+}
+function face(cx,cy,mood,s){
+  const ink='#5b4370';
+  ctx.save();ctx.translate(cx,cy);ctx.scale(s,s);ctx.lineCap='round';ctx.lineWidth=5;
+  ctx.fillStyle='rgba(255,110,160,.4)';
+  for(const sx of[-1,1]){ctx.beginPath();ctx.ellipse(sx*50,20,14,9,0,0,7);ctx.fill()}
+  ctx.strokeStyle=ink;ctx.fillStyle=ink;
+  for(const sx of[-1,1]){
+    const x=sx*30;ctx.beginPath();
+    if(mood==='happy'){ctx.arc(x,-8,8,0,7);ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(x+2.5,-11,2.8,0,7);ctx.fill();ctx.fillStyle=ink}
+    else if(mood==='sleepy'){ctx.arc(x,-10,10,.15*Math.PI,.85*Math.PI);ctx.stroke()}
+    else if(mood==='calm'){ctx.arc(x,-2,10,1.15*Math.PI,1.85*Math.PI);ctx.stroke()}
+    else if(mood==='drowsy'){ctx.arc(x,-8,8,0,Math.PI);ctx.fill();ctx.beginPath();ctx.moveTo(x-11,-8);ctx.lineTo(x+11,-8);ctx.stroke()}
+    else{
+      ctx.fillStyle='#fff';ctx.lineWidth=3;ctx.arc(x,-8,11,0,7);ctx.fill();ctx.stroke();
+      ctx.fillStyle=ink;ctx.beginPath();ctx.arc(x+Math.sin(T*30+sx)*3,-8+Math.cos(T*27)*2,5,0,7);ctx.fill();ctx.lineWidth=5;
+    }
+  }
+  ctx.beginPath();
+  if(mood==='happy'){ctx.arc(0,6,14,.1*Math.PI,.9*Math.PI);ctx.stroke()}
+  else if(mood==='sleepy'){ctx.ellipse(0,16,5,6,0,0,7);ctx.fill()}
+  else if(mood==='calm'){ctx.arc(0,8,10,.15*Math.PI,.85*Math.PI);ctx.stroke()}
+  else if(mood==='drowsy'){ctx.moveTo(-8,18);ctx.quadraticCurveTo(0,14,8,18);ctx.stroke()}
+  else{ctx.ellipse(0,16,11,13,0,0,7);ctx.fill();ctx.fillStyle='#ff8fb5';ctx.beginPath();ctx.ellipse(0,23,6,4,0,0,7);ctx.fill()}
+  if(mood==='sleepy'||mood==='drowsy'){
+    ctx.fillStyle=ink;
+    for(let i=0;i<3;i++){const u=((T*.6+i/3)%1);ctx.globalAlpha=Math.sin(u*Math.PI);ctx.font=600 ${14+i*5}px Fredoka,sans-serif;ctx.fillText('z',50+i*14,-25-u*40)}
+    ctx.globalAlpha=1;
+  }
+  ctx.restore();
+}
+function gateDraw(y){
+  const x=preEdge(y)-1,gap=15*gate,c=gate>.5?'#6fdca8':'#ff8f9f';
+  ctx.fillStyle=c;ctx.beginPath();ctx.roundRect(x-7,y-gap/2-12,14,12,5);ctx.roundRect(x-7,y+gap/2,14,12,5);ctx.fill();
+  if(gate<.15){
+    ctx.fillStyle='#ff7f93';ctx.strokeStyle='#ff7f93';ctx.lineWidth=3;
+    ctx.beginPath();ctx.roundRect(x-8,y-4,16,12,3);ctx.fill();
+    ctx.beginPath();ctx.arc(x,y-4,5,Math.PI,0);ctx.stroke();
+  }
+}
+function draw(){
+  sc=cv.width/W;ctx.setTransform(sc,0,0,sc,0,0);
+  ctx.globalAlpha=mode==='alc'?.3:1;
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,rgb(cur[0]));g.addColorStop(1,rgb(cur[1]));
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;
+  if(mode==='amp'&&!calm){ctx.globalAlpha=.14+.14*Math.sin(T*14);ctx.fillStyle='#fff6a0';ctx.fillRect(0,0,W,H);ctx.globalAlpha=1}
+  ctx.save();
+  if(mode==='alc'&&!calm){ctx.translate(W/2+Math.sin(T*.6)*4,H/2);ctx.rotate(Math.sin(T*.8)*.012);ctx.translate(-W/2,-H/2)}
+  const amp=mode==='amp'?3.5:1;
+  /* labels */
+  ctx.font='600 16px Fredoka,sans-serif';ctx.fillStyle='rgba(91,67,112,.8)';ctx.textAlign='center';
+  ctx.fillText('Presynaptic neuron',PRE.cx,424);ctx.fillText('Postsynaptic neuron',POST.cx,424);ctx.fillText('Synaptic cleft',400,424);
+  /* cells */
+  blob(PRE,'#ffe6f2','#ffb9d9','#f78fb8',amp);
+  blob(POST,'#e6f0ff','#b5d0ff','#7ea6f2',amp);
+  /* vesicles */
+  V.forEach((v,i)=>{
+    const sp=mode==='amp'?10:mode==='mor'?0:mode==='alc'?.7:2;
+    const y=v.y+Math.sin(T*sp+v.ph)*(mode==='amp'?5:3);
+    const c=i%2?COL.ne:COL.ach;
+    ctx.fillStyle='rgba(255,255,255,.85)';ctx.beginPath();ctx.arc(v.x,y,13,0,7);ctx.fill();
+    ctx.fillStyle=c;ctx.beginPath();ctx.arc(v.x,y,9,0,7);ctx.fill();
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(v.x-3,y-3,2.5,0,7);ctx.fill();
+  });
+  /* calcium gates */
+  GY.forEach(gateDraw);
+  ctx.font='500 12px Fredoka,sans-serif';ctx.fillStyle='rgba(91,67,112,.75)';ctx.textAlign='right';
+  ctx.fillText(gate<.5?'Ca²⁺ gates locked':'Ca²⁺ gates',preEdge(122)-12,122);
+  /* faces */
+  face(115,225,M.pre,1.15);face(690,225,M.post,1.15);
+  /* receptors */
+  R.forEach((rc,i)=>{
+    const droop=mode==='alc'||mode==='mor'||mode==='dz'?1:0,bx=rc.x+6,by=rc.y+droop*2;
+    if(rc.pulse>0){ctx.globalAlpha=rc.pulse*.6;ctx.fillStyle=rc.col;ctx.beginPath();ctx.arc(bx,by,14+rc.pulse*16,0,7);ctx.fill();ctx.globalAlpha=1}
+    if(mode==='dz'){const ph=(T*.8+i*.19)%1;ctx.strokeStyle=rgba(60,200,120,${(1-ph)*.9});ctx.lineWidth=3;ctx.beginPath();ctx.arc(bx,by,14+ph*24,0,7);ctx.stroke()}
+    ctx.strokeStyle=M.body;ctx.lineWidth=5;ctx.lineCap='round';ctx.beginPath();ctx.arc(bx,by,19,.62*Math.PI,1.38*Math.PI);ctx.stroke();
+    ctx.fillStyle='#fffdf7';ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(bx,by,14,droop?11:14,0,0,7);ctx.fill();ctx.stroke();
+    face(bx,by+1,M.post,.22);
+  });
+  /* particles */
+  for(const p of P){
+    const a=Math.max(0,Math.min(1,p.age/.25,(p.life-p.age)/.5));ctx.globalAlpha=a;
+    if(p.t==='cl'){
+      ctx.fillStyle=COL.cl;ctx.font='700 24px Fredoka,sans-serif';ctx.textAlign='center';ctx.fillText('−',p.x,p.y+8);
+      ctx.globalAlpha=a*(.5+.5*Math.sin(T*14+p.x));ctx.strokeStyle='#fff';ctx.lineWidth=1.8;
+      ctx.beginPath();ctx.moveTo(p.x+8,p.y-12);ctx.lineTo(p.x+8,p.y-5);ctx.moveTo(p.x+4.5,p.y-8.5);ctx.lineTo(p.x+11.5,p.y-8.5);ctx.stroke();
+    }else{
+      ctx.fillStyle=COL[p.t];ctx.globalAlpha=a*.25;ctx.beginPath();ctx.arc(p.x,p.y,11,0,7);ctx.fill();
+      ctx.globalAlpha=a;ctx.beginPath();ctx.arc(p.x,p.y,6.5,0,7);ctx.fill();
+      ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(p.x-2,p.y-2,2,0,7);ctx.fill();
+    }
+  }
+  for(const s of S){ctx.globalAlpha=Math.min(1,s.l*2);ctx.fillStyle=s.c;ctx.beginPath();ctx.arc(s.x,s.y,2.5,0,7);ctx.fill()}
+  ctx.globalAlpha=1;ctx.restore();
+}
+
+let last=performance.now();
+function loop(now){
+  const dt=Math.min(.05,(now-last)/1000);last=now;T+=dt;
+  step(dt);draw();requestAnimationFrame(loop);
+}
+setMode('normal');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
